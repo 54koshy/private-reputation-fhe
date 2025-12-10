@@ -1,0 +1,16 @@
+# Sepolia Network Configuration
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+
+# Private Key (for deployment only, keep secure!)
+PRIVATE_KEY=your_private_key_here
+
+# Contract Address (after deployment)
+NEXT_PUBLIC_REPUTATION_MANAGER_ADDRESS=0x4A688A45Eef0A1EE6C25930Cfee5B988EC5d351B
+
+# WalletConnect Project ID (optional)
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+
+# Etherscan API Key (for contract verification)
+ETHERSCAN_API_KEY=your_etherscan_api_key
+
+
