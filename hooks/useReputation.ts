@@ -194,17 +194,16 @@ export function useReputation() {
   const [transactionHash, setTransactionHash] = useState<`0x${string}` | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Always get contract address (with fallback)
+  // get contract address, use fallback if it fails
   let contractAddress: `0x${string}` | undefined;
   try {
     contractAddress = getReputationManagerAddress();
   } catch (error: any) {
-    console.error("Failed to get contract address:", error);
-    // Use fallback address directly
+    console.error("failed to get contract address:", error);
     contractAddress = "0x4A688A45Eef0A1EE6C25930Cfee5B988EC5d351B" as `0x${string}`;
   }
 
-  // Read total profiles
+  // read total profiles count
   const { data: totalProfiles } = useReadContract({
     address: contractAddress || undefined,
     abi: REPUTATION_MANAGER_ABI,
@@ -214,44 +213,26 @@ export function useReputation() {
     },
   });
 
-  // Get all profile owners
-  const { data: allProfileOwners, refetch: refetchProfileOwners, isLoading: loadingOwners, error: ownersError } = useReadContract({
+  // get all profile owners
+  const { data: allProfileOwners, refetch: refetchProfileOwners, isLoading: loadingOwners } = useReadContract({
     address: contractAddress || undefined,
     abi: REPUTATION_MANAGER_ABI,
     functionName: "getAllProfileOwners",
     query: {
       enabled: !!contractAddress,
-      refetchInterval: 5000, // Refetch every 5 seconds
+      refetchInterval: 5000, // refresh every 5 seconds
     },
   });
 
-  // Normalize allProfileOwners to ensure it's an array of addresses
+  // normalize the array (sometimes it's not an array for some reason)
   const normalizedProfileOwners = allProfileOwners 
     ? (Array.isArray(allProfileOwners) ? allProfileOwners : [allProfileOwners]).filter(Boolean) as `0x${string}`[]
     : undefined;
 
-  // Debug logging
-  useEffect(() => {
-    console.log("useReputation - contractAddress:", contractAddress);
-    console.log("useReputation - allProfileOwners (raw):", allProfileOwners);
-    console.log("useReputation - normalizedProfileOwners:", normalizedProfileOwners);
-    console.log("useReputation - totalProfiles:", totalProfiles);
-    console.log("useReputation - loadingOwners:", loadingOwners);
-    console.log("useReputation - ownersError:", ownersError);
-    if (allProfileOwners) {
-      console.log("useReputation - allProfileOwners type:", typeof allProfileOwners);
-      console.log("useReputation - allProfileOwners is array:", Array.isArray(allProfileOwners));
-      if (Array.isArray(allProfileOwners)) {
-        console.log("useReputation - allProfileOwners length:", allProfileOwners.length);
-        console.log("useReputation - allProfileOwners content:", allProfileOwners);
-      }
-    }
-  }, [contractAddress, allProfileOwners, normalizedProfileOwners, totalProfiles, loadingOwners, ownersError]);
-
-  // Write contract
+  // write to contract
   const { writeContract, data: hash, isPending, isError, error, reset } = useWriteContract();
 
-  // Wait for transaction
+  // wait for tx confirmation
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: hash || undefined,
   });
@@ -259,18 +240,13 @@ export function useReputation() {
   useEffect(() => {
     if (hash) {
       setTransactionHash(hash);
-      console.log("Transaction hash received:", hash);
-      // Keep loading state true until transaction is confirmed
     }
   }, [hash]);
 
   useEffect(() => {
     if (error) {
-      console.error("Write contract error:", error);
+      console.error("write contract error:", error);
       setIsLoading(false);
-      // Show error to user
-      const errorMessage = error.message || "Transaction failed";
-      alert(`Error: ${errorMessage}`);
     }
   }, [error]);
 
@@ -285,24 +261,16 @@ export function useReputation() {
       throw new Error("Wallet not connected");
     }
     if (!contractAddress) {
-      // Use fallback if still not available
       contractAddress = "0x4A688A45Eef0A1EE6C25930Cfee5B988EC5d351B" as `0x${string}`;
     }
     setIsLoading(true);
     reset();
-    try {
-      console.log("Creating profile with:", { nickname, twitter, discord, description, avatarHash });
-      writeContract({
-        address: contractAddress,
-        abi: REPUTATION_MANAGER_ABI,
-        functionName: "createProfile",
-        args: [nickname, twitter, discord, description, avatarHash],
-      });
-    } catch (err: any) {
-      console.error("Error in createProfile:", err);
-      setIsLoading(false);
-      throw err;
-    }
+    writeContract({
+      address: contractAddress,
+      abi: REPUTATION_MANAGER_ABI,
+      functionName: "createProfile",
+      args: [nickname, twitter, discord, description, avatarHash],
+    });
   };
 
   const updateProfile = (
@@ -320,19 +288,12 @@ export function useReputation() {
     }
     setIsLoading(true);
     reset();
-    try {
-      console.log("Updating profile with:", { nickname, twitter, discord, description, avatarHash });
-      writeContract({
-        address: contractAddress,
-        abi: REPUTATION_MANAGER_ABI,
-        functionName: "updateProfile",
-        args: [nickname, twitter, discord, description, avatarHash],
-      });
-    } catch (err: any) {
-      console.error("Error in updateProfile:", err);
-      setIsLoading(false);
-      throw err;
-    }
+    writeContract({
+      address: contractAddress,
+      abi: REPUTATION_MANAGER_ABI,
+      functionName: "updateProfile",
+      args: [nickname, twitter, discord, description, avatarHash],
+    });
   };
 
   const vote = (profileOwner: `0x${string}`, isLike: boolean) => {

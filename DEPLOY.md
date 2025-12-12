@@ -42,3 +42,5 @@ Make sure to set these in your deployment platform (Vercel/Netlify):
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` - WalletConnect project ID (optional)
 - `SEPOLIA_RPC_URL` - Sepolia RPC endpoint (for deployment only)
 
+
+
