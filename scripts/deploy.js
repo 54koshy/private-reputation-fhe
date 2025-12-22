@@ -18,7 +18,7 @@ async function main() {
   console.log("Starting deployment to Sepolia...\n");
   
   const privateKey = process.env.PRIVATE_KEY;
-  const rpcUrl = process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+  const rpcUrl = process.env.SEPOLIA_RPC_URL || "https://sepolia.drpc.org";
   
   if (!privateKey) {
     throw new Error("PRIVATE_KEY not found");

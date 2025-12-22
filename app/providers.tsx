@@ -17,6 +17,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return process.env.NEXT_PUBLIC_APP_URL || "https://private-reputation-system.netlify.app";
   }, []);
 
+  // Get RPC URL from environment variable
+  const rpcUrl = useMemo(() => {
+    return process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || "https://sepolia.drpc.org";
+  }, []);
+
   // Create wagmi config from ConnectKit default config
   const wagmiConfig = useMemo(
     () =>
@@ -29,11 +34,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "private-reputation-default",
           chains: [sepolia],
           transports: {
-            [sepolia.id]: http(),
+            [sepolia.id]: http(rpcUrl),
           },
         })
       ),
-    [appUrl]
+    [appUrl, rpcUrl]
   );
 
   return (
