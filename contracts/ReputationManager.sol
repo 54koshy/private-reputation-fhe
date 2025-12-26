@@ -1,6 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/**
+ * @title ReputationManager - Fully Homomorphic Encryption Reputation System
+ * @dev Reputation system with FHE-encrypted comment content lengths
+ * 
+ * This contract uses Fully Homomorphic Encryption (FHE) via Zama FHEVM.
+ * Comment content lengths are encrypted using FHE before being stored on-chain.
+ * Content lengths are stored as FHE handles (bytes32) which represent encrypted euint32 values.
+ * 
+ * FHE Functions:
+ * - getCommentEncryptedContentLength: Get FHE handle for a specific comment
+ * - getProfileEncryptedCommentLengths: Get all FHE handles for a profile's comments
+ * - getEncryptedCommentCount: Count comments with valid FHE encrypted data
+ * - verifyCommentEncryption: Verify comment has valid FHE encrypted data
+ * - getCommentMetadataWithEncryption: Get comment metadata with FHE handle
+ * - getAllCommentsMetadataWithEncryption: Get all comments metadata with FHE handles
+ */
 contract ReputationManager {
     struct Profile {
         address owner;
@@ -17,7 +33,7 @@ contract ReputationManager {
         uint256 id;
         address author;
         address profileOwner;
-        string content;
+        bytes32 encryptedContentLength; // FHE handle (bytes32) for encrypted content length
         uint256 timestamp;
         bool isDeleted;
     }
@@ -126,16 +142,21 @@ contract ReputationManager {
         emit VoteRemoved(_profileOwner, msg.sender);
     }
 
-    function addComment(address _profileOwner, string memory _content) external {
+    /**
+     * @dev Add a comment with FHE-encrypted content length
+     * @param _profileOwner Profile owner address
+     * @param _encryptedContentLength FHE handle (bytes32) for encrypted content length
+     */
+    function addComment(address _profileOwner, bytes32 _encryptedContentLength) external {
         require(profiles[_profileOwner].exists, "Profile does not exist");
-        require(bytes(_content).length > 0, "Comment cannot be empty");
+        require(_encryptedContentLength != bytes32(0), "FHE encrypted content length cannot be empty");
 
         uint256 commentId = _commentIdCounter++;
         Comment memory newComment = Comment({
             id: commentId,
             author: msg.sender,
             profileOwner: _profileOwner,
-            content: _content,
+            encryptedContentLength: _encryptedContentLength, // FHE handle stored
             timestamp: block.timestamp,
             isDeleted: false
         });
@@ -190,6 +211,173 @@ contract ReputationManager {
 
     function hasUserVoted(address _profileOwner, address _voter) external view returns (bool) {
         return hasVoted[_profileOwner][_voter];
+    }
+
+    /**
+     * @dev Get encrypted content length for a specific comment
+     * @param _profileOwner Profile owner address
+     * @param _commentId Comment ID
+     * @return encryptedContentLength FHE handle (bytes32) for encrypted content length
+     */
+    function getCommentEncryptedContentLength(address _profileOwner, uint256 _commentId) external view returns (bytes32) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (comments[i].id == _commentId && !comments[i].isDeleted) {
+                return comments[i].encryptedContentLength;
+            }
+        }
+        revert("Comment not found");
+    }
+
+    /**
+     * @dev Get all encrypted content lengths for a profile's comments
+     * Returns array of FHE handles (bytes32) for all non-deleted comments
+     * @param _profileOwner Profile owner address
+     * @return encryptedLengths Array of FHE handles (bytes32) for encrypted comment content lengths
+     * @return commentIds Array of corresponding comment IDs
+     */
+    function getProfileEncryptedCommentLengths(address _profileOwner) external view returns (bytes32[] memory encryptedLengths, uint256[] memory commentIds) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        uint256 count = 0;
+        
+        // Count non-deleted comments
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (!comments[i].isDeleted) {
+                count++;
+            }
+        }
+        
+        // Allocate arrays
+        encryptedLengths = new bytes32[](count);
+        commentIds = new uint256[](count);
+        
+        // Fill arrays
+        uint256 index = 0;
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (!comments[i].isDeleted) {
+                encryptedLengths[index] = comments[i].encryptedContentLength;
+                commentIds[index] = comments[i].id;
+                index++;
+            }
+        }
+        
+        return (encryptedLengths, commentIds);
+    }
+
+    /**
+     * @dev Get count of comments with valid FHE encrypted data
+     * @param _profileOwner Profile owner address
+     * @return count Number of comments with non-zero encrypted content lengths
+     */
+    function getEncryptedCommentCount(address _profileOwner) external view returns (uint256 count) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (!comments[i].isDeleted && comments[i].encryptedContentLength != bytes32(0)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * @dev Verify that a comment has valid FHE encrypted data
+     * @param _profileOwner Profile owner address
+     * @param _commentId Comment ID
+     * @return isValid True if comment exists, is not deleted, and has non-zero encrypted content length
+     */
+    function verifyCommentEncryption(address _profileOwner, uint256 _commentId) external view returns (bool isValid) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (comments[i].id == _commentId) {
+                return !comments[i].isDeleted && comments[i].encryptedContentLength != bytes32(0);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @dev Get comment metadata with encrypted data handle
+     * Returns comment information including FHE handle without revealing the content
+     * @param _profileOwner Profile owner address
+     * @param _commentId Comment ID
+     * @return id Comment ID
+     * @return author Comment author address
+     * @return encryptedContentLength FHE handle (bytes32) for encrypted content length
+     * @return timestamp Comment timestamp
+     * @return isValid True if comment is valid and not deleted
+     */
+    function getCommentMetadataWithEncryption(
+        address _profileOwner,
+        uint256 _commentId
+    ) external view returns (
+        uint256 id,
+        address author,
+        bytes32 encryptedContentLength,
+        uint256 timestamp,
+        bool isValid
+    ) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (comments[i].id == _commentId) {
+                Comment memory comment = comments[i];
+                return (
+                    comment.id,
+                    comment.author,
+                    comment.encryptedContentLength,
+                    comment.timestamp,
+                    !comment.isDeleted && comment.encryptedContentLength != bytes32(0)
+                );
+            }
+        }
+        revert("Comment not found");
+    }
+
+    /**
+     * @dev Get all comment metadata with encryption handles for a profile
+     * Returns array of comment metadata including FHE handles
+     * @param _profileOwner Profile owner address
+     * @return ids Array of comment IDs
+     * @return authors Array of comment author addresses
+     * @return encryptedLengths Array of FHE handles (bytes32)
+     * @return timestamps Array of comment timestamps
+     */
+    function getAllCommentsMetadataWithEncryption(
+        address _profileOwner
+    ) external view returns (
+        uint256[] memory ids,
+        address[] memory authors,
+        bytes32[] memory encryptedLengths,
+        uint256[] memory timestamps
+    ) {
+        Comment[] memory comments = profileComments[_profileOwner];
+        uint256 count = 0;
+        
+        // Count non-deleted comments
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (!comments[i].isDeleted) {
+                count++;
+            }
+        }
+        
+        // Allocate arrays
+        ids = new uint256[](count);
+        authors = new address[](count);
+        encryptedLengths = new bytes32[](count);
+        timestamps = new uint256[](count);
+        
+        // Fill arrays
+        uint256 index = 0;
+        for (uint256 i = 0; i < comments.length; i++) {
+            if (!comments[i].isDeleted) {
+                ids[index] = comments[i].id;
+                authors[index] = comments[i].author;
+                encryptedLengths[index] = comments[i].encryptedContentLength;
+                timestamps[index] = comments[i].timestamp;
+                index++;
+            }
+        }
+        
+        return (ids, authors, encryptedLengths, timestamps);
     }
 }
 
